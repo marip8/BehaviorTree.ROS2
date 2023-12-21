@@ -174,8 +174,8 @@ template<class T> inline
     throw RuntimeError("topic_name is empty");
   }
   
-  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
-  callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
+//  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
+//  callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
   rclcpp::SubscriptionOptions sub_option;
   sub_option.callback_group = callback_group_;
   auto callback = std::bind(&RosTopicSubNode::topicCallback, this, std::placeholders::_1);

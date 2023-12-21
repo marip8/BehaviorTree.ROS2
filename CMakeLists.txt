@@ -66,6 +66,7 @@ add_target_dependencies(sleep_server)
 # INSTALL
 
 install(TARGETS
+  bt_ros2
   sleep_client
   sleep_client_dyn
   sleep_server
