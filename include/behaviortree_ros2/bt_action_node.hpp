@@ -65,8 +65,10 @@ public:
   using ActionType = ActionT;
   using ActionClient = typename rclcpp_action::Client<ActionT>;
   using ActionClientPtr = std::shared_ptr<ActionClient>;
+
   using Goal = typename ActionT::Goal;
-  using GoalHandle = typename rclcpp_action::ClientGoalHandle<ActionT>;
+  // using GoalHandle = typename std::shared_future<rclcpp_action::ClientGoalHandle<ActionT>>;
+  using GoalHandle = rclcpp_action::ClientGoalHandle<ActionT>;
   using WrappedResult = typename rclcpp_action::ClientGoalHandle<ActionT>::WrappedResult;
   using Feedback = typename ActionT::Feedback;
 
@@ -151,13 +153,11 @@ protected:
   std::shared_ptr<rclcpp::Node> node_;
   std::string prev_action_name_;
   bool action_name_may_change_ = false;
-  const std::chrono::milliseconds server_timeout_;
+  std::chrono::milliseconds server_timeout_;
 
 private:
 
   ActionClientPtr action_client_;
-  rclcpp::CallbackGroup::SharedPtr callback_group_;
-  rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
 
   std::shared_future<typename GoalHandle::SharedPtr> future_goal_handle_;
   typename GoalHandle::SharedPtr goal_handle_;
@@ -235,9 +235,7 @@ template<class T> inline
     throw RuntimeError("action_name is empty");
   }
 
-  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-  callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
-  action_client_ = rclcpp_action::create_client<T>(node_, action_name, callback_group_);
+  action_client_ = rclcpp_action::create_client<T>(node_, action_name);
 
   prev_action_name_ = action_name;
 
@@ -311,13 +309,20 @@ template<class T> inline
     goal_options.result_callback =
       [this](const WrappedResult& result)
     {
-      RCLCPP_DEBUG( node_->get_logger(), "result_callback" );
-      result_ = result;
-      emitWakeUpSignal();
+      if (result.goal_id == goal_handle_->get_goal_id())
+      {
+        RCLCPP_DEBUG( node_->get_logger(), "result_callback" );
+        result_ = result;
+        emitWakeUpSignal();
+      }
+      else
+      {
+        RCLCPP_WARN(node_->get_logger(), "Received result callback with mismatched goal IDs; ignoring...");
+      }
     };
     //--------------------
     goal_options.goal_response_callback =
-      [this](typename GoalHandle::SharedPtr const future_handle)
+      [this](std::shared_future<typename GoalHandle::SharedPtr> future_handle)
     {
       auto goal_handle_ = future_handle.get();
       if (!goal_handle_)
@@ -337,7 +342,7 @@ template<class T> inline
 
   if (status() == NodeStatus::RUNNING)
   {
-    callback_group_executor_.spin_some();
+    rclcpp::spin_some(node_);
 
     // FIRST case: check if the goal request has a timeout
     if( !goal_received_ )
@@ -345,7 +350,7 @@ template<class T> inline
       auto nodelay = std::chrono::milliseconds(0);
       auto timeout = rclcpp::Duration::from_seconds( double(server_timeout_.count()) / 1000);
 
-      auto ret = callback_group_executor_.spin_until_future_complete(future_goal_handle_, nodelay);
+      auto ret = rclcpp::spin_until_future_complete(node_, future_goal_handle_, nodelay);
       if (ret != rclcpp::FutureReturnCode::SUCCESS)
       {
         if( (node_->now() - time_goal_sent_) > timeout )
@@ -407,12 +412,14 @@ template<class T> inline
 {
   auto future_cancel = action_client_->async_cancel_goal(goal_handle_);
 
-  if (callback_group_executor_.spin_until_future_complete(future_cancel, server_timeout_) !=
+  if (rclcpp::spin_until_future_complete(node_, future_cancel, server_timeout_) !=
       rclcpp::FutureReturnCode::SUCCESS)
   {
     RCLCPP_ERROR( node_->get_logger(), "Failed to cancel action server for [%s]",
                  prev_action_name_.c_str());
   }
+
+  resetStatus();
 }
 
 
