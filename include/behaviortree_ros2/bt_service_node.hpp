@@ -135,9 +135,6 @@ protected:
 private:
 
   typename std::shared_ptr<ServiceClient> service_client_;
-  rclcpp::CallbackGroup::SharedPtr callback_group_;
-  rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
-
   std::shared_future<typename Response::SharedPtr> future_response_;
 
   rclcpp::Time time_request_sent_;
@@ -208,9 +205,7 @@ template<class T> inline
     throw RuntimeError("service_name is empty");
   }
 
-  callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-  callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
-  service_client_ = node_->create_client<T>(service_name, rmw_qos_profile_services_default, callback_group_);
+  service_client_ = node_->create_client<T>(service_name, rmw_qos_profile_services_default);
   prev_service_name_ = service_name;
 
   bool found = service_client_->wait_for_service(service_timeout_);
@@ -264,7 +259,7 @@ template<class T> inline
       return CheckStatus( onFailure(INVALID_REQUEST) );
     }
 
-    future_response_ = service_client_->async_send_request(request).share();
+    future_response_ = std::shared_future(service_client_->async_send_request(request));
     time_request_sent_ = node_->now();
 
     return NodeStatus::RUNNING;
@@ -272,7 +267,7 @@ template<class T> inline
 
   if (status() == NodeStatus::RUNNING)
   {
-    callback_group_executor_.spin_some();
+    rclcpp::spin_some(node_);
 
     // FIRST case: check if the goal request has a timeout
     if( !response_received_ )
@@ -280,7 +275,7 @@ template<class T> inline
       auto const nodelay = std::chrono::milliseconds(0);
       auto const timeout = rclcpp::Duration::from_seconds( double(service_timeout_.count()) / 1000);
 
-      auto ret = callback_group_executor_.spin_until_future_complete(future_response_, nodelay);
+      auto ret = rclcpp::spin_until_future_complete(node_, future_response_, nodelay);
 
       if (ret != rclcpp::FutureReturnCode::SUCCESS)
       {
