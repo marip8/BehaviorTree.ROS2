@@ -120,8 +120,30 @@ public:
   /** Callback invoked when something goes wrong; you can override it.
    * It must return either SUCCESS or FAILURE.
    */
-  virtual BT::NodeStatus onFailure(ServiceNodeErrorCode /*error*/)
+  virtual BT::NodeStatus onFailure(ServiceNodeErrorCode error)
   { 
+    std::stringstream ss;
+    ss << "Service '" << prev_service_name_ << "'";
+
+    switch(error)
+    {
+    case SERVICE_UNREACHABLE:
+      ss << " is unreachable";
+      break;
+    case SERVICE_TIMEOUT:
+      ss << " timed out";
+      break;
+    case INVALID_REQUEST:
+      ss << " was sent an invalid request";
+      break;
+    case SERVICE_ABORTED:
+      ss << " was aborted";
+      break;
+    default:
+      break;
+    }
+
+    RCLCPP_ERROR(node_->get_logger(), ss.str().c_str());
     return NodeStatus::FAILURE;
   }
 
@@ -208,13 +230,7 @@ template<class T> inline
   service_client_ = node_->create_client<T>(service_name, rmw_qos_profile_services_default);
   prev_service_name_ = service_name;
 
-  bool found = service_client_->wait_for_service(service_timeout_);
-  if(!found)
-  {
-    RCLCPP_ERROR(node_->get_logger(), "%s: Service with name '%s' is not reachable.",
-                 name().c_str(), prev_service_name_.c_str());
-  }
-  return found;
+  return true;
 }
 
 template<class T> inline
@@ -259,6 +275,11 @@ template<class T> inline
       return CheckStatus( onFailure(INVALID_REQUEST) );
     }
 
+    // Check that the service exists
+    if(!service_client_->service_is_ready())
+      return onFailure(SERVICE_UNREACHABLE);
+
+    // Call the service
     future_response_ = std::shared_future(service_client_->async_send_request(request));
     time_request_sent_ = node_->now();
 
