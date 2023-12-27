@@ -234,16 +234,8 @@ template<class T> inline
   }
 
   action_client_ = rclcpp_action::create_client<T>(node_, action_name);
-
   prev_action_name_ = action_name;
-
-  bool found = action_client_->wait_for_action_server(server_timeout_);
-  if(!found)
-  {
-    RCLCPP_ERROR(node_->get_logger(), "%s: Action server with name '%s' is not reachable.",
-                 name().c_str(), prev_action_name_.c_str());
-  }
-  return found;
+  return true;
 }
 
 template<class T> inline
@@ -271,6 +263,10 @@ template<class T> inline
     }
     return status;
   };
+
+  // Check if server is ready
+  if(!action_client_->action_server_is_ready())
+    return onFailure(SERVER_UNREACHABLE);
 
   // first step to be done only at the beginning of the Action
   if (status() == BT::NodeStatus::IDLE)
