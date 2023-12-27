@@ -138,8 +138,36 @@ public:
   /** Callback invoked when something goes wrong.
    * It must return either SUCCESS or FAILURE.
    */
-  virtual BT::NodeStatus onFailure(ActionNodeErrorCode /*error*/)
+  virtual BT::NodeStatus onFailure(ActionNodeErrorCode error)
   {
+    std::stringstream ss;
+    ss << "Action '" << prev_action_name_ << "' failed: '";
+
+    switch(error)
+    {
+    case SERVER_UNREACHABLE:
+      ss << "server unreachable'";
+      break;
+    case SEND_GOAL_TIMEOUT:
+      ss << "goal timed out'";
+      break;
+    case GOAL_REJECTED_BY_SERVER:
+      ss << "goal rejected by server'";
+      break;
+    case ACTION_ABORTED:
+      ss << "action aborted'";
+      break;
+    case ACTION_CANCELLED:
+      ss << "action cancelled'";
+      break;
+    case INVALID_GOAL:
+      ss << "invalid goal'";
+      break;
+    default:
+      break;
+    }
+
+    RCLCPP_ERROR(node_->get_logger(), ss.str().c_str());
     return NodeStatus::FAILURE;
   }
 
