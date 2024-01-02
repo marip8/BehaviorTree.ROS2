@@ -152,7 +152,7 @@ protected:
   std::shared_ptr<rclcpp::Node> node_;
   std::string prev_service_name_;
   bool service_name_may_change_ = false;
-  const std::chrono::milliseconds service_timeout_;
+  std::chrono::milliseconds service_timeout_;
 
 private:
 
