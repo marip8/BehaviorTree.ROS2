@@ -65,8 +65,10 @@ public:
   using ActionType = ActionT;
   using ActionClient = typename rclcpp_action::Client<ActionT>;
   using ActionClientPtr = std::shared_ptr<ActionClient>;
+
   using Goal = typename ActionT::Goal;
-  using GoalHandle = typename std::shared_future<rclcpp_action::ClientGoalHandle<ActionT>>;
+  // using GoalHandle = typename std::shared_future<rclcpp_action::ClientGoalHandle<ActionT>>;
+  using GoalHandle = rclcpp_action::ClientGoalHandle<ActionT>;
   using WrappedResult = typename rclcpp_action::ClientGoalHandle<ActionT>::WrappedResult;
   using Feedback = typename ActionT::Feedback;
 
@@ -179,7 +181,7 @@ protected:
   std::shared_ptr<rclcpp::Node> node_;
   std::string prev_action_name_;
   bool action_name_may_change_ = false;
-  const std::chrono::milliseconds server_timeout_;
+  std::chrono::milliseconds server_timeout_;
 
 private:
 
@@ -331,13 +333,20 @@ template<class T> inline
     goal_options.result_callback =
       [this](const WrappedResult& result)
     {
-      RCLCPP_DEBUG( node_->get_logger(), "result_callback" );
-      result_ = result;
-      emitWakeUpSignal();
+      if (result.goal_id == goal_handle_->get_goal_id())
+      {
+        RCLCPP_DEBUG( node_->get_logger(), "result_callback" );
+        result_ = result;
+        emitWakeUpSignal();
+      }
+      else
+      {
+        RCLCPP_WARN(node_->get_logger(), "Received result callback with mismatched goal IDs; ignoring...");
+      }
     };
     //--------------------
     goal_options.goal_response_callback =
-      [this](typename GoalHandle::SharedPtr const future_handle)
+      [this](std::shared_future<typename GoalHandle::SharedPtr> future_handle)
     {
       auto goal_handle_ = future_handle.get();
       if (!goal_handle_)
@@ -349,7 +358,7 @@ template<class T> inline
     };
     //--------------------
 
-    future_goal_handle_ = std::shared_future(action_client_->async_send_goal( goal, goal_options ));
+    future_goal_handle_ = action_client_->async_send_goal( goal, goal_options );
     time_goal_sent_ = node_->now();
 
     return NodeStatus::RUNNING;
@@ -433,6 +442,8 @@ template<class T> inline
     RCLCPP_ERROR( node_->get_logger(), "Failed to cancel action server for [%s]",
                  prev_action_name_.c_str());
   }
+
+  resetStatus();
 }
 
 
