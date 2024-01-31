@@ -65,8 +65,9 @@ add_target_dependencies(sleep_server)
 ######################################################
 # INSTALL
 
+install(TARGETS bt_ros2 EXPORT ${PROJECT_NAME}-targets DESTINATION lib)
+
 install(TARGETS
-  bt_ros2
   sleep_client
   sleep_client_dyn
   sleep_server
@@ -82,9 +83,8 @@ install(
 )
 
 ament_export_include_directories(include)
-
 ament_export_dependencies(behaviortree_cpp rosidl_default_runtime)
-
+ament_export_targets(${PROJECT_NAME}-targets HAS_LIBRARY_TARGET)
 ament_package()
 
 
