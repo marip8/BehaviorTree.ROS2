@@ -311,9 +311,12 @@ template<class T> inline
     goal_options.result_callback =
       [this](const WrappedResult& result)
     {
-      RCLCPP_DEBUG( node_->get_logger(), "result_callback" );
-      result_ = result;
-      emitWakeUpSignal();
+      if (result.goal_id == goal_handle_->get_goal_id())
+      {
+        RCLCPP_DEBUG( node_->get_logger(), "result_callback" );
+        result_ = result;
+        emitWakeUpSignal();
+      }
     };
     //--------------------
     goal_options.goal_response_callback =
