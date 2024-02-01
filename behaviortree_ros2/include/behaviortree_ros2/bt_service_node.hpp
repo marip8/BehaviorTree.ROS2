@@ -22,6 +22,7 @@
 #include "behaviortree_cpp/bt_factory.h"
 
 #include "behaviortree_ros2/ros_node_params.hpp"
+#include "behaviortree_ros2/version_check.hpp"
 
 namespace BT
 {
@@ -149,7 +150,9 @@ private:
 
   typename std::shared_ptr<ServiceClient> service_client_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
+#ifdef ROS_GTE_HUMBLE
   rclcpp::executors::SingleThreadedExecutor callback_group_executor_;
+#endif
 
   std::shared_future<typename Response::SharedPtr> future_response_;
 
@@ -223,7 +226,9 @@ template<class T> inline
   }
 
   callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+#ifdef ROS_GTE_HUMBLE
   callback_group_executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
+#endif
   service_client_ = node_->create_client<T>(service_name, rmw_qos_profile_services_default, callback_group_);
   prev_service_name_ = service_name;
 
@@ -282,7 +287,7 @@ template<class T> inline
     if(!service_client_->service_is_ready())
       return onFailure(SERVICE_UNREACHABLE);
 
-    future_response_ = service_client_->async_send_request(request).share();
+    future_response_ = service_client_->async_send_request(request);
     time_request_sent_ = node_->now();
 
     return NodeStatus::RUNNING;
@@ -290,7 +295,11 @@ template<class T> inline
 
   if (status() == NodeStatus::RUNNING)
   {
+#ifdef ROS_GTE_HUMBLE
     callback_group_executor_.spin_some();
+#else
+    rclcpp::spin_some(node_);
+#endif
 
     // FIRST case: check if the goal request has a timeout
     if( !response_received_ )
@@ -298,7 +307,11 @@ template<class T> inline
       auto const nodelay = std::chrono::milliseconds(0);
       auto const timeout = rclcpp::Duration::from_seconds( double(service_timeout_.count()) / 1000);
 
+#ifdef ROS_GTE_HUMBLE
       auto ret = callback_group_executor_.spin_until_future_complete(future_response_, nodelay);
+#else
+      auto ret = rclcpp::spin_until_future_complete(node_, future_response_, nodelay);
+#endif
 
       if (ret != rclcpp::FutureReturnCode::SUCCESS)
       {

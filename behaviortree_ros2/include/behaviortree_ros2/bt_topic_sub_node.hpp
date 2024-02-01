@@ -22,6 +22,7 @@
 #include "behaviortree_cpp/bt_factory.h"
 
 #include "behaviortree_ros2/ros_node_params.hpp"
+#include "behaviortree_ros2/version_check.hpp"
 #include <boost/signals2.hpp>
 
 namespace BT
@@ -55,10 +56,15 @@ class RosTopicSubNode : public BT::ConditionNode
     void init(std::shared_ptr<rclcpp::Node> node, const std::string& topic_name)
     {
       // create a callback group for this particular instance
-      callback_group = 
+#ifdef ROS_GTE_HUMBLE
+      callback_group =
         node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
       callback_group_executor.add_callback_group(
         callback_group, node->get_node_base_interface());
+#else
+      callback_group =
+        node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+#endif
 
       rclcpp::SubscriptionOptions option;
       option.callback_group = callback_group;
@@ -73,7 +79,9 @@ class RosTopicSubNode : public BT::ConditionNode
 
     std::shared_ptr<Subscriber> subscriber;
     rclcpp::CallbackGroup::SharedPtr callback_group;
+#ifdef ROS_GTE_HUMBLE
     rclcpp::executors::SingleThreadedExecutor callback_group_executor;
+#endif
     boost::signals2::signal<void (const std::shared_ptr<TopicT>)> broadcaster;
 
 
@@ -292,7 +300,11 @@ template<class T> inline
     }
     return status;
   };
+#ifdef ROS_GTE_HUMBLE
   sub_instance_->callback_group_executor.spin_some();
+#else
+  rclcpp::spin_some(node_);
+#endif
   auto status = CheckStatus (onTick(last_msg_));
   last_msg_ = nullptr;
 
